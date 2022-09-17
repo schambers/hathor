@@ -41,9 +41,9 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
         sig = osc.Process();
         sig2 = osc2.Process();
 
-        oscOutput = (sig + sig2) * 0.5;
+        oscOutput = sig + sig2;
 
-        output = filterEnabled ? filter.Process(oscOutput) : oscOutput;
+        output = filterEnabled ? filter.Process(oscOutput) : oscOutput * 0.5;
 
         // left & right combined, mix the oscillators
         out[i] = out[i + 1] = output;
@@ -76,21 +76,26 @@ int main(void)
     hw.SetAudioBlockSize(4);
     sample_rate = hw.AudioSampleRate();
 
+    // TODO: move to function
+    float shapeValue = 1.0 - hw.adc.GetFloat(shapeKnob);
+    uint8_t mappedShape = fmap(shapeValue, 0, 5);
+
     // Oscillator 1
-    osc.Init(sample_rate);
-    osc.SetWaveform(osc.WAVE_SIN);
+    
+    osc.SetWaveform(mappedShape);
     osc.SetFreq(440);
-    osc.SetAmp(0.5);
+    osc.SetAmp(getFloat(masterKnob));
+    osc.Init(sample_rate);
 
     // Oscillator 2
+    osc2.SetWaveform(mappedShape);
+    osc2.SetFreq(400 * getFloat(detuneKnob));
+    osc2.SetAmp(getFloat(masterKnob));
     osc2.Init(sample_rate);
-    osc2.SetWaveform(osc.WAVE_SIN);
-    osc2.SetFreq(880);
-    osc2.SetAmp(0.5);
 
     // MoogLadder Filter
     filter.Init(sample_rate);
-    filter.SetRes(0.7);
+    filter.SetRes(0.25);
 
     // Initialize the GPIO object
     // Mode: INPUT - because we want to read from the button
