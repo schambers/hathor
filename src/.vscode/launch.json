@@ -1,28 +1,15 @@
 {
   "configurations": [
     {
-      "configFiles": [
-        "interface/stlink.cfg",
-        "target/stm32h7x.cfg"
-      ],
+      "configFiles": ["interface/stlink.cfg", "target/stm32h7x.cfg"],
       "cwd": "${workspaceFolder}",
-      "debuggerArgs": [
-        "-d",
-        "${workspaceRoot}"
-      ],
-      "executable": "${workspaceRoot}/build/oscillator.elf",
+      "debuggerArgs": ["-d", "${workspaceRoot}"],
+      "executable": "${workspaceRoot}/build/hathor.elf",
       "interface": "swd",
       "name": "Cortex Debug",
-      "openOCDLaunchCommands": [
-        "init",
-        "reset init"
-      ],
+      "openOCDLaunchCommands": ["init", "reset init"],
       "preLaunchTask": "build_all_debug",
-      "preRestartCommands": [
-        "load",
-        "enable breakpoint",
-        "monitor reset"
-      ],
+      "preRestartCommands": ["load", "enable breakpoint", "monitor reset"],
       "request": "launch",
       "runToMain": true,
       "servertype": "openocd",
