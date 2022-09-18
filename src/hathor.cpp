@@ -18,9 +18,14 @@ using namespace daisy;
 
 static DaisySeed  hw;
 static MoogLadder filter;
-static Oscillator osc;
-static Oscillator osc2;
+static Oscillator osc, osc2, lfo;
 static bool filterEnabled;
+
+float oscFreq = 440;
+float lfoFreq;
+float lfoAmount;
+float lfoOutput;
+float filterFreq;
 
 enum AdcChannel {
     masterKnob = 0,
@@ -28,6 +33,9 @@ enum AdcChannel {
     detuneKnob,
     filterSwitch,
     filterKnob,
+    resKnob,
+    lfoRateKnob,
+    lfoAmountKnob,
     NUM_ADC_CHANNELS
 };
 
@@ -38,6 +46,22 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
     float sig, sig2, oscOutput, output;
     for(size_t i = 0; i < size; i += 2)
     {
+        float filterMixFreq, osc1MixFreq, osc2MixFreq;
+
+        lfoOutput = fmap(lfo.Process() + 0.5, 0, 5000);
+
+        // Determine filter frequency, mixing in LFO parameters
+        filterMixFreq = filterFreq * (1 - lfoAmount) + lfoOutput * lfoAmount;
+        filter.SetFreq(filterMixFreq);
+
+        // Determine oscillator 1, 2 frequencies, mixing in LFO parameters
+        // TODO: this is a bit much, may need to revisit later
+        // float detuneAmount = 1 - hw.adc.GetFloat(detuneKnob);
+        // osc1MixFreq = oscFreq * (1 - lfoAmount) + lfoOutput * lfoAmount;
+        // osc2MixFreq = (oscFreq * detuneAmount) * (1 - lfoAmount) + lfoOutput * lfoAmount;
+        // osc.SetFreq(osc1MixFreq);
+        // osc2.SetFreq(osc2MixFreq);
+
         sig = osc.Process();
         sig2 = osc2.Process();
 
@@ -71,6 +95,10 @@ int main(void)
     adcConfig[shapeKnob].InitSingle(seed::A1);
     adcConfig[filterSwitch].InitSingle(seed::A2);
     adcConfig[filterKnob].InitSingle(seed::A3);
+    adcConfig[resKnob].InitSingle(seed::A4);
+    //adcConfig[lfoSwitch].InitSingle(seed::A5);
+    adcConfig[lfoRateKnob].InitSingle(seed::A6);
+    adcConfig[lfoAmountKnob].InitSingle(seed::A7);
     hw.adc.Init(adcConfig, NUM_ADC_CHANNELS);
 
     hw.SetAudioBlockSize(4);
@@ -81,21 +109,26 @@ int main(void)
     uint8_t mappedShape = fmap(shapeValue, 0, 5);
 
     // Oscillator 1
-    
     osc.SetWaveform(mappedShape);
-    osc.SetFreq(440);
+    osc.SetFreq(oscFreq);
     osc.SetAmp(getFloat(masterKnob));
     osc.Init(sample_rate);
 
     // Oscillator 2
     osc2.SetWaveform(mappedShape);
-    osc2.SetFreq(400 * getFloat(detuneKnob));
+    osc2.SetFreq(oscFreq * getFloat(detuneKnob));
     osc2.SetAmp(getFloat(masterKnob));
     osc2.Init(sample_rate);
 
     // MoogLadder Filter
     filter.Init(sample_rate);
-    filter.SetRes(0.25);
+    filter.SetRes(getFloat(resKnob));
+
+    // LFO that affects oscillators 1, 2
+    lfo.SetWaveform(Oscillator::WAVE_SIN);
+    lfo.SetFreq(0.4);
+    lfo.SetAmp(0.2);
+    lfo.Init(sample_rate);
 
     // Initialize the GPIO object
     // Mode: INPUT - because we want to read from the button
@@ -117,22 +150,32 @@ int main(void)
 
         // Detune knob
         float detuneAmount = getFloat(detuneKnob);
-        osc2.SetFreq(400 * detuneAmount);
+        osc2.SetFreq(oscFreq * detuneAmount);
 
-        float shapeValue = 1.0 - hw.adc.GetFloat(shapeKnob);
-        uint8_t mappedShape = fmap(shapeValue, 0, 5);
+        uint8_t mappedShape = fmap(getFloat(shapeKnob), 0, 5);
         osc.SetWaveform(mappedShape);
         osc2.SetWaveform(mappedShape);
 
         filterEnabled = !filterSwitch.Read();
-        float filterFreq = fmap(getFloat(filterKnob), 0, 5000, Mapping::EXP);
-        filter.SetFreq(filterFreq);
+        float filterRes = fmap(getFloat(resKnob), 0, 0.8);
+        filter.SetRes(filterRes);
+        filterFreq = fmap(getFloat(filterKnob), 0, 5000); // This is now set dynamically during AudioCallback depending on LFO amount/rate
+        // TODO, play with the mapping curve for different filter applications
+
+        // LFO updates
+        lfoFreq = fmap(getFloat(lfoRateKnob), 0, 64);
+        lfo.SetFreq(lfoFreq);
+        lfoAmount = getFloat(lfoAmountKnob);
 
         //hw.Print("filterSwitchValue:" FLT_FMT3 "\n", FLT_VAR3(filterSwitchValue));
-        hw.Print("filterSwitchValue:%d\n", filterSwitch.Read());
-        hw.Print("filterEnabled:%d\n", filterEnabled);
-        hw.Print("filterKnob:" FLT_FMT3 "\n", FLT_VAR3(filterFreq));
+        //hw.Print("filterSwitchValue:%d\n", filterSwitch.Read());
+        //hw.Print("filterEnabled:%d\n", filterEnabled);
+        //hw.Print("filterKnob:" FLT_FMT3 "\n", FLT_VAR3(filterFreq));
+        //hw.Print("lfoAmount:" FLT_FMT3 "\n", FLT_VAR3(lfoAmount));
         //hw.Print("ampValue:" FLT_FMT3 "\n", FLT_VAR3(ampValue));
+        //hw.Print("resValue:" FLT_FMT3 "\n", FLT_VAR3(getFloat(resKnob)));
+        //hw.Print("lfoRate:" FLT_FMT3 "\n", FLT_VAR3(getFloat(lfoRateKnob)));
+        //hw.Print("lfoOutput:" FLT_FMT3 "\n", FLT_VAR3(lfoOutput));
         //hw.Print("shapeValue (" FLT_FMT3 ") mappedShape %d)\n", FLT_VAR3(shapeValue), FLT_VAR3(mappedShape));
         //hw.Print("mappedShape:" FLT_FMT3 "\n", );
     }
