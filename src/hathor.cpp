@@ -128,6 +128,7 @@ int main(void)
     osc2.SetWaveform(mappedShape);
     osc2.SetFreq(oscFreq * getFloat(detuneKnob));
     osc2.SetAmp(getFloat(masterKnob));
+    
     osc2.Init(sample_rate);
 
     // MoogLadder Filter
@@ -153,8 +154,8 @@ int main(void)
     hw.adc.Start();
     hw.StartAudio(AudioCallback);
 
-    while(1) {
-        System::Delay(10);
+    while(1) {        
+        //System::Delay(1000);
 
         // Master knob
         float ampValue = getFloat(masterKnob);
@@ -162,8 +163,7 @@ int main(void)
         osc2.SetAmp(ampValue);
 
         // Detune knob
-        float detuneAmount = getFloat(detuneKnob);
-        osc2.SetFreq(oscFreq * detuneAmount);
+        osc2.SetFreq(oscFreq * getFloat(detuneKnob));
 
         uint8_t mappedShape = fmap(getFloat(shapeKnob), 0, 5);
         osc.SetWaveform(mappedShape);
@@ -194,3 +194,34 @@ int main(void)
         //hw.Print("mappedShape:" FLT_FMT3 "\n", );
     }
 }
+
+// Midi processing
+// In headers
+// static MidiUsbHandler midi;
+// =================================
+// In main setup loop:
+// // Setup Midi over USB
+// MidiUsbHandler::Config midi_cfg;
+// midi_cfg.transport_config.periph = MidiUsbTransport::Config::INTERNAL;
+// midi.Init(midi_cfg);
+// =================================
+// in loop
+// midi.Listen();
+// while(midi.HasEvents())
+// {
+//     auto msg = midi.PopEvent();
+//     switch(msg.type)
+//     {
+//         case NoteOn:
+//         {
+//             auto note_msg = msg.AsNoteOn();
+//             if(note_msg.velocity != 0) {
+//                 osc.SetFreq(mtof(note_msg.note));
+//                 osc2.SetFreq(mtof(note_msg.note) * getFloat(detuneKnob));
+//             }
+                
+//         }
+//         break;
+//         default: break;
+//     }
+// }
