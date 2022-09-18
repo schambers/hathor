@@ -24,6 +24,7 @@ static DaisySeed  hw;
 static MoogLadder filter;
 static Oscillator osc, osc2, lfo;
 static bool filterEnabled;
+static bool lfoEnabled;
 
 float oscFreq = 440;
 float lfoFreq;
@@ -38,6 +39,7 @@ enum AdcChannel {
     filterSwitch,
     filterKnob,
     resKnob,
+    lfoSwitch,
     lfoRateKnob,
     lfoAmountKnob,
     NUM_ADC_CHANNELS
@@ -50,13 +52,16 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
     float sig, sig2, oscOutput, output;
     for(size_t i = 0; i < size; i += 2)
     {
-        float filterMixFreq;
+        // Default to filterFreq in case lfo is not enabled
+        float filterMixFreq = filterFreq;
 
         lfoOutput = fmap(lfo.Process() + 0.5, 0, 5000);
 
         // Determine filter frequency, mixing in LFO parameters
-        filterMixFreq = filterFreq * (1 - lfoAmount) + lfoOutput * lfoAmount;
-        filter.SetFreq(filterMixFreq);
+        if (lfoEnabled) {
+            filterMixFreq = filterFreq * (1 - lfoAmount) + lfoOutput * lfoAmount;
+            filter.SetFreq(filterMixFreq);
+        }
 
         // Determine oscillator 1, 2 frequencies, mixing in LFO parameters
         // TODO: this is a bit much, may need to revisit later
@@ -101,7 +106,7 @@ int main(void)
     adcConfig[filterSwitch].InitSingle(seed::A2);
     adcConfig[filterKnob].InitSingle(seed::A3);
     adcConfig[resKnob].InitSingle(seed::A4);
-    //adcConfig[lfoSwitch].InitSingle(seed::A5);
+    adcConfig[lfoSwitch].InitSingle(seed::A5);
     adcConfig[lfoRateKnob].InitSingle(seed::A6);
     adcConfig[lfoAmountKnob].InitSingle(seed::A7);
     hw.adc.Init(adcConfig, NUM_ADC_CHANNELS);
@@ -141,6 +146,9 @@ int main(void)
     GPIO filterSwitch;
     filterSwitch.Init(seed::A2, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
 
+    GPIO lfoSwitch;
+    lfoSwitch.Init(seed::A5, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+
     // start callback
     hw.adc.Start();
     hw.StartAudio(AudioCallback);
@@ -168,6 +176,7 @@ int main(void)
         // TODO, play with the mapping curve for different filter applications
 
         // LFO updates
+        lfoEnabled = !lfoSwitch.Read();
         lfoFreq = fmap(getFloat(lfoRateKnob), 0, 64);
         lfo.SetFreq(lfoFreq);
         lfoAmount = getFloat(lfoAmountKnob);
