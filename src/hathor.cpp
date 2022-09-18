@@ -46,7 +46,7 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
     float sig, sig2, oscOutput, output;
     for(size_t i = 0; i < size; i += 2)
     {
-        float filterMixFreq, osc1MixFreq, osc2MixFreq;
+        float filterMixFreq;
 
         lfoOutput = fmap(lfo.Process() + 0.5, 0, 5000);
 
@@ -56,6 +56,7 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
 
         // Determine oscillator 1, 2 frequencies, mixing in LFO parameters
         // TODO: this is a bit much, may need to revisit later
+        //, osc1MixFreq, osc2MixFreq;
         // float detuneAmount = 1 - hw.adc.GetFloat(detuneKnob);
         // osc1MixFreq = oscFreq * (1 - lfoAmount) + lfoOutput * lfoAmount;
         // osc2MixFreq = (oscFreq * detuneAmount) * (1 - lfoAmount) + lfoOutput * lfoAmount;
@@ -141,7 +142,7 @@ int main(void)
     hw.StartAudio(AudioCallback);
 
     while(1) {
-        System::Delay(1000);
+        System::Delay(10);
 
         // Master knob
         float ampValue = getFloat(masterKnob);
