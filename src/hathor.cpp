@@ -1,12 +1,16 @@
 /*
 
-Master knob: A8
-Left Out: A9
-Right Out: A10
-Detune knob: A0
-Shape knob: A1
-Filter switch: A2
-Filter knob: A3
+Master knob     : A8
+Left Out        : A9
+Right Out       : A10
+Detune knob     : A0
+Shape knob      : A1
+Filter switch   : A2
+Filter knob     : A3
+Filter Res knob : A4
+LFO switch      : A5
+LFO rate knob   : A6
+LFO amount knob : A7
 
 */
 
