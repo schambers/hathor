@@ -20,9 +20,11 @@ LFO amount knob : A7
 using namespace daisysp;
 using namespace daisy;
 
+static MidiUsbHandler midi;
+
 static DaisySeed  hw;
 static MoogLadder filter;
-static Oscillator osc, osc2, lfo;
+static Oscillator osc, lfo;
 //static Adsr env;
 static bool filterEnabled;
 static bool lfoEnabled;
@@ -50,7 +52,7 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
                           AudioHandle::InterleavingOutputBuffer out,
                           size_t                                size)
 {
-    float sig, sig2, oscOutput, output;
+    float oscOutput, output;
     for(size_t i = 0; i < size; i += 2)
     {
         // Default to filterFreq in case lfo is not enabled
@@ -64,21 +66,9 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
             filter.SetFreq(filterMixFreq);
         }
 
-        // Determine oscillator 1, 2 frequencies, mixing in LFO parameters
-        // TODO: this is a bit much, may need to revisit later
-        //, osc1MixFreq, osc2MixFreq;
-        // float detuneAmount = 1 - hw.adc.GetFloat(detuneKnob);
-        // osc1MixFreq = oscFreq * (1 - lfoAmount) + lfoOutput * lfoAmount;
-        // osc2MixFreq = (oscFreq * detuneAmount) * (1 - lfoAmount) + lfoOutput * lfoAmount;
-        // osc.SetFreq(osc1MixFreq);
-        // osc2.SetFreq(osc2MixFreq);
+        oscOutput = osc.Process();
 
-        sig = osc.Process();
-        sig2 = osc2.Process();
-
-        oscOutput = sig + sig2;
-
-        output = filterEnabled ? filter.Process(oscOutput) : oscOutput * 0.5;
+        output = filterEnabled ? filter.Process(oscOutput) : oscOutput;
 
         // left & right combined, mix the oscillators
         out[i] = out[i + 1] = output;
@@ -96,6 +86,11 @@ int main(void)
     float sample_rate;
     hw.Configure();
     hw.Init();
+
+    // Setup midi handler
+    MidiUsbHandler::Config midi_cfg;
+    midi_cfg.transport_config.periph = MidiUsbTransport::Config::INTERNAL;
+    midi.Init(midi_cfg);
 
     // Send log messages and enable serial messages
     hw.StartLog();
@@ -121,16 +116,11 @@ int main(void)
 
     // Oscillator 1
     osc.SetWaveform(mappedShape);
-    osc.SetFreq(oscFreq);
-    osc.SetAmp(getFloat(masterKnob));
-    osc.Init(sample_rate);
-
-    // Oscillator 2
-    osc2.SetWaveform(mappedShape);
-    osc2.SetFreq(oscFreq * getFloat(detuneKnob));
-    osc2.SetAmp(getFloat(masterKnob));
+    //osc.SetFreq(oscFreq);
+    //osc.SetAmp(getFloat(masterKnob));
     
-    osc2.Init(sample_rate);
+    osc.Init(sample_rate);
+    osc.SetAmp(0.0f);
 
     // MoogLadder Filter
     filter.Init(sample_rate);
@@ -139,7 +129,8 @@ int main(void)
     // LFO that affects oscillators 1, 2
     lfo.SetWaveform(Oscillator::WAVE_SIN);
     lfo.SetFreq(0.4);
-    lfo.SetAmp(0.2);
+    //lfo.SetAmp(0.2);
+    lfo.SetAmp(0.0f);
     lfo.Init(sample_rate);
 
     // Initialize the GPIO object
@@ -155,20 +146,17 @@ int main(void)
     hw.adc.Start();
     hw.StartAudio(AudioCallback);
 
-    while(1) {        
+    while(1) {
+        midi.Listen();
         //System::Delay(1000);
 
         // Master knob
-        float ampValue = getFloat(masterKnob);
-        osc.SetAmp(ampValue);
-        osc2.SetAmp(ampValue);
-
-        // Detune knob
-        osc2.SetFreq(oscFreq * getFloat(detuneKnob));
+        // midi conversion
+        //float ampValue = getFloat(masterKnob);
+        //osc.SetAmp(0.0f);
 
         uint8_t mappedShape = fmap(getFloat(shapeKnob), 0, 5);
         osc.SetWaveform(mappedShape);
-        osc2.SetWaveform(mappedShape);
 
         filterEnabled = !filterSwitch.Read();
         float filterRes = fmap(getFloat(resKnob), 0, 0.8);
@@ -181,6 +169,28 @@ int main(void)
         lfoFreq = fmap(getFloat(lfoRateKnob), 0, 64);
         lfo.SetFreq(lfoFreq);
         lfoAmount = getFloat(lfoAmountKnob);
+
+        while(midi.HasEvents())
+        {
+            auto msg = midi.PopEvent();
+            switch(msg.type)
+            {
+                case NoteOn:
+                {
+                    auto note_msg = msg.AsNoteOn();
+                    if(note_msg.velocity != 0) {
+                        osc.SetFreq(mtof(note_msg.note));
+                        osc.SetAmp(getFloat(masterKnob));
+                    }
+                }
+                case NoteOff:
+                {
+                    osc.SetAmp(0.0f);
+                }
+                break;
+                default: break;
+            }
+        }
 
         //hw.Print("filterSwitchValue:" FLT_FMT3 "\n", FLT_VAR3(filterSwitchValue));
         //hw.Print("filterSwitchValue:%d\n", filterSwitch.Read());
@@ -195,34 +205,3 @@ int main(void)
         //hw.Print("mappedShape:" FLT_FMT3 "\n", );
     }
 }
-
-// Midi processing
-// In headers
-// static MidiUsbHandler midi;
-// =================================
-// In main setup loop:
-// // Setup Midi over USB
-// MidiUsbHandler::Config midi_cfg;
-// midi_cfg.transport_config.periph = MidiUsbTransport::Config::INTERNAL;
-// midi.Init(midi_cfg);
-// =================================
-// in loop
-// midi.Listen();
-// while(midi.HasEvents())
-// {
-//     auto msg = midi.PopEvent();
-//     switch(msg.type)
-//     {
-//         case NoteOn:
-//         {
-//             auto note_msg = msg.AsNoteOn();
-//             if(note_msg.velocity != 0) {
-//                 osc.SetFreq(mtof(note_msg.note));
-//                 osc2.SetFreq(mtof(note_msg.note) * getFloat(detuneKnob));
-//             }
-                
-//         }
-//         break;
-//         default: break;
-//     }
-// }
