@@ -23,6 +23,7 @@ using namespace daisy;
 static DaisySeed  hw;
 static MoogLadder filter;
 static Oscillator osc, osc2, lfo;
+//static Adsr env;
 static bool filterEnabled;
 static bool lfoEnabled;
 
@@ -103,10 +104,10 @@ int main(void)
     adcConfig[masterKnob].InitSingle(seed::A8);
     adcConfig[detuneKnob].InitSingle(seed::A0);
     adcConfig[shapeKnob].InitSingle(seed::A1);
-    adcConfig[filterSwitch].InitSingle(seed::A2);
+    adcConfig[filterSwitch].InitSingle(seed::D14);
     adcConfig[filterKnob].InitSingle(seed::A3);
     adcConfig[resKnob].InitSingle(seed::A4);
-    adcConfig[lfoSwitch].InitSingle(seed::A5);
+    adcConfig[lfoSwitch].InitSingle(seed::D13);
     adcConfig[lfoRateKnob].InitSingle(seed::A6);
     adcConfig[lfoAmountKnob].InitSingle(seed::A7);
     hw.adc.Init(adcConfig, NUM_ADC_CHANNELS);
@@ -145,10 +146,10 @@ int main(void)
     // Mode: INPUT - because we want to read from the button
     // Pullup: Internal resistor to prevent needing extra components
     GPIO filterSwitch;
-    filterSwitch.Init(seed::A2, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+    filterSwitch.Init(seed::D14, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
 
     GPIO lfoSwitch;
-    lfoSwitch.Init(seed::A5, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+    lfoSwitch.Init(seed::D13, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
 
     // start callback
     hw.adc.Start();
