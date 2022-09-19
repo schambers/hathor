@@ -182,12 +182,13 @@ int main(void)
                         osc.SetFreq(mtof(note_msg.note));
                         osc.SetAmp(getFloat(masterKnob));
                     }
+                    break;
                 }
                 case NoteOff:
                 {
                     osc.SetAmp(0.0f);
+                    break;
                 }
-                break;
                 default: break;
             }
         }
