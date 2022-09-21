@@ -28,14 +28,16 @@ static Oscillator osc, lfo;
 static Adsr env;
 static bool filterEnabled;
 static bool lfoEnabled;
+static ReverbSc DSY_SDRAM_BSS verb;
 
 float oscFreq = 440;
+float masterAmp;
 float lfoFreq;
 float lfoAmount;
 float lfoOutput;
 float filterFreq;
-
-bool isPlaying = false;
+float verbDry;
+float verbWet;
 bool gate;
 
 enum AdcChannel {
@@ -48,6 +50,9 @@ enum AdcChannel {
     lfoSwitch,
     lfoRateKnob,
     lfoAmountKnob,
+    attackKnob,
+    drKnob,
+    verbAmountKnob,
     NUM_ADC_CHANNELS
 };
 
@@ -55,7 +60,7 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
                           AudioHandle::InterleavingOutputBuffer out,
                           size_t                                size)
 {
-    float envOut, oscOutput, output;
+    float envOut, oscOutput, output, sigWet;
     for(size_t i = 0; i < size; i += 2)
     {
         // Default to filterFreq in case lfo is not enabled
@@ -69,15 +74,15 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
             filter.SetFreq(filterMixFreq);
         }
 
-
         envOut = env.Process(gate);
         osc.SetAmp(envOut);
         oscOutput = osc.Process();
-        output = filterEnabled ? filter.Process(oscOutput) : oscOutput;
+        output = filterEnabled ? filter.Process(oscOutput) * 3 : oscOutput;
 
+        verb.Process( output, 0, &sigWet, 0);
 
         // left & right combined, mix the oscillators
-        out[i] = out[i + 1] = output;
+        out[i] = out[i + 1] = (output * verbDry + sigWet * verbWet) * masterAmp;
     }
 }
 
@@ -111,6 +116,9 @@ int main(void)
     adcConfig[lfoSwitch].InitSingle(seed::D13);
     adcConfig[lfoRateKnob].InitSingle(seed::A6);
     adcConfig[lfoAmountKnob].InitSingle(seed::A7);
+    adcConfig[attackKnob].InitSingle(seed::A5);
+    adcConfig[drKnob].InitSingle(seed::A2);
+    adcConfig[verbAmountKnob].InitSingle(seed::A9);
     hw.adc.Init(adcConfig, NUM_ADC_CHANNELS);
 
     hw.SetAudioBlockSize(4);
@@ -140,10 +148,14 @@ int main(void)
     lfo.Init(sample_rate);
 
     env.Init(sample_rate);
-	env.SetTime(ADSR_SEG_ATTACK, .1);
-	env.SetTime(ADSR_SEG_DECAY, .1);
-	env.SetTime(ADSR_SEG_RELEASE, .4);
+	env.SetTime(ADSR_SEG_ATTACK, getFloat(attackKnob));
+	env.SetTime(ADSR_SEG_DECAY, getFloat(drKnob));
+	env.SetTime(ADSR_SEG_RELEASE, getFloat(drKnob));
     env.SetSustainLevel(.25);
+
+    verb.Init(sample_rate);
+    verb.SetFeedback(0.95f);
+    verb.SetLpFreq(16000.0f);
 
     // Initialize the GPIO object
     // Mode: INPUT - because we want to read from the button
@@ -192,24 +204,26 @@ int main(void)
                     auto note_msg = msg.AsNoteOn();
                     if(note_msg.velocity != 0) {
                         osc.SetFreq(mtof(note_msg.note));
-                        osc.SetAmp(getFloat(masterKnob));
-                        isPlaying = true;
                         gate = true;
                     }
                 }
                 break;
                 case NoteOff:
                 {
-                    osc.SetAmp(0.0f);
-                    isPlaying = false;
                     gate = false;
                 }
                 break;
                 default: break;
             }
 
-            env.SetTime(ADSR_SEG_ATTACK, .1);
-	        env.SetTime(ADSR_SEG_RELEASE, .4);
+            env.SetTime(ADSR_SEG_ATTACK, getFloat(attackKnob));
+	        env.SetTime(ADSR_SEG_RELEASE, getFloat(drKnob));
+
+            verbWet = (fmap(getFloat(verbAmountKnob), 0, 1));
+            verbDry = (-1 + verbWet) * -1;
+
+            // Update master knob
+            masterAmp = getFloat(masterKnob);
         }
 
         //hw.Print("filterSwitchValue:" FLT_FMT3 "\n", FLT_VAR3(filterSwitchValue));
