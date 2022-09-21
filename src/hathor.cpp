@@ -25,7 +25,7 @@ static MidiUsbHandler midi;
 static DaisySeed  hw;
 static MoogLadder filter;
 static Oscillator osc, lfo;
-//static Adsr env;
+static Adsr env;
 static bool filterEnabled;
 static bool lfoEnabled;
 
@@ -34,6 +34,9 @@ float lfoFreq;
 float lfoAmount;
 float lfoOutput;
 float filterFreq;
+
+bool isPlaying = false;
+bool gate;
 
 enum AdcChannel {
     masterKnob = 0,
@@ -52,7 +55,7 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
                           AudioHandle::InterleavingOutputBuffer out,
                           size_t                                size)
 {
-    float oscOutput, output;
+    float envOut, oscOutput, output;
     for(size_t i = 0; i < size; i += 2)
     {
         // Default to filterFreq in case lfo is not enabled
@@ -66,9 +69,12 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
             filter.SetFreq(filterMixFreq);
         }
 
-        oscOutput = osc.Process();
 
+        envOut = env.Process(gate);
+        osc.SetAmp(envOut);
+        oscOutput = osc.Process();
         output = filterEnabled ? filter.Process(oscOutput) : oscOutput;
+
 
         // left & right combined, mix the oscillators
         out[i] = out[i + 1] = output;
@@ -133,6 +139,12 @@ int main(void)
     lfo.SetAmp(0.0f);
     lfo.Init(sample_rate);
 
+    env.Init(sample_rate);
+	env.SetTime(ADSR_SEG_ATTACK, .1);
+	env.SetTime(ADSR_SEG_DECAY, .1);
+	env.SetTime(ADSR_SEG_RELEASE, .4);
+    env.SetSustainLevel(.25);
+
     // Initialize the GPIO object
     // Mode: INPUT - because we want to read from the button
     // Pullup: Internal resistor to prevent needing extra components
@@ -181,16 +193,23 @@ int main(void)
                     if(note_msg.velocity != 0) {
                         osc.SetFreq(mtof(note_msg.note));
                         osc.SetAmp(getFloat(masterKnob));
+                        isPlaying = true;
+                        gate = true;
                     }
-                    break;
                 }
+                break;
                 case NoteOff:
                 {
                     osc.SetAmp(0.0f);
-                    break;
+                    isPlaying = false;
+                    gate = false;
                 }
+                break;
                 default: break;
             }
+
+            env.SetTime(ADSR_SEG_ATTACK, .1);
+	        env.SetTime(ADSR_SEG_RELEASE, .4);
         }
 
         //hw.Print("filterSwitchValue:" FLT_FMT3 "\n", FLT_VAR3(filterSwitchValue));
