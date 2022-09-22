@@ -29,6 +29,7 @@ static Oscillator lfo;
 static Chorus chorus;
 static bool filterEnabled;
 static bool lfoEnabled;
+static bool chrEnabled;
 static ReverbSc DSY_SDRAM_BSS verb;
 
 static Oscillator osc[NUM_VOICES];
@@ -62,6 +63,7 @@ enum AdcChannel {
     verbAmountKnob,
     chrFreqKnob,
     chrAmountKnob,
+    chrSwitch,
     NUM_ADC_CHANNELS
 };
 
@@ -93,12 +95,16 @@ static void AudioCallback(AudioHandle::InterleavingInputBuffer  in,
             }
             else {
                 output = output + osc[i].Process();
-            }
+            } 
         }
 
+        // Apply Filter
         output = filterEnabled ? filter.Process(output) * 3 : output;
 
-        output = chorus.Process(output);
+        // Apply Chorus
+        output = chrEnabled ? chorus.Process(output) * 3 : output;
+
+        // Apply Reverb        
         verb.Process( output, 0, &sigWet, 0);
 
         // left & right combined from output and added reverb mix then add amp value for volume
@@ -141,6 +147,7 @@ int main(void)
     adcConfig[verbAmountKnob].InitSingle(seed::A9);
     adcConfig[chrFreqKnob].InitSingle(seed::A10);
     adcConfig[chrAmountKnob].InitSingle(seed::A11);
+    adcConfig[chrSwitch].InitSingle(seed::D12);
     hw.adc.Init(adcConfig, NUM_ADC_CHANNELS);
 
     hw.SetAudioBlockSize(4);
@@ -184,15 +191,17 @@ int main(void)
     chorus.Init(sample_rate);
     chorus.SetLfoFreq(getFloat(chrFreqKnob), .2f);
     chorus.SetLfoDepth(getFloat(chrAmountKnob), getFloat(chrAmountKnob));
-    chorus.SetDelay(.75f, .9f);
+    chorus.SetDelay(.65f, .8f);
 
     // Initialize the GPIO object
     // Mode: INPUT - because we want to read from the button
     // Pullup: Internal resistor to prevent needing extra components
     GPIO filterSwitch;
     GPIO lfoSwitch;
+    GPIO chrSwitch;
     filterSwitch.Init(seed::D14, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
     lfoSwitch.Init(seed::D13, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
+    chrSwitch.Init(seed::D12, GPIO::Mode::INPUT, GPIO::Pull::PULLUP);
 
     // start callback
     hw.adc.Start();
@@ -200,7 +209,6 @@ int main(void)
 
     while(1) {
         midi.Listen();
-
 
         filterEnabled = !filterSwitch.Read();
         float filterRes = fmap(getFloat(resKnob), 0, 0.8);
@@ -216,10 +224,12 @@ int main(void)
 
         detuneAmount = getFloat(detuneKnob);
 
+        // Chorus effect updates
         float chrFreq = getFloat(chrFreqKnob);
         float chrDepth = getFloat(chrAmountKnob);
+        chrEnabled = !chrSwitch.Read();
         chorus.SetLfoFreq(chrFreq, (chrFreq * 0.9));
-        chorus.SetLfoDepth(chrDepth, chrDepth); 
+        chorus.SetLfoDepth(chrDepth, chrDepth);
 
         uint8_t mappedShape = fmap(getFloat(shapeKnob), 0, 5);
         for (uint8_t i = 0; i < NUM_VOICES; i++) {
