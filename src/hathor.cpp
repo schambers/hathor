@@ -169,10 +169,6 @@ int main(void)
 	    env[i].SetTime(ADSR_SEG_RELEASE, getFloat(drKnob));
         env[i].SetSustainLevel(.25);
     }
-    // Oscillator 1
-    //osc.SetWaveform(mappedShape);
-    //osc.Init(sample_rate);
-    //osc.SetAmp(0.0f);
 
     // MoogLadder Filter
     filter.Init(sample_rate);
@@ -222,8 +218,6 @@ int main(void)
         lfo.SetFreq(lfoFreq);
         lfoAmount = getFloat(lfoAmountKnob);
 
-        detuneAmount = getFloat(detuneKnob);
-
         // Chorus effect updates
         float chrFreq = getFloat(chrFreqKnob);
         float chrDepth = getFloat(chrAmountKnob);
@@ -249,9 +243,8 @@ int main(void)
                     if(note_msg.velocity != 0) {
                         next = (next + 1) % NUM_VOICES;
                         note[next] = note_msg.note;
-                        osc[next].SetFreq(mtof(note_msg.note) );
+                        osc[next].SetFreq(mtof(note_msg.note));
                         gate[next] = true;
-                        
                     }
                 }
                 break;
